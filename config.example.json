@@ -1,0 +1,6 @@
+{
+  "allowedIps": [],
+  "tlsCert": "",
+  "tlsKey": "",
+  "port": 3000
+}

@@ -5,4 +5,5 @@ services:
       - "${PORT:-3000}:3000"
     volumes:
       - /tmp:/tmp
+      - ./config.json:/app/config.json:ro
     restart: unless-stopped
