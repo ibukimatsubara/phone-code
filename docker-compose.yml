@@ -1,0 +1,8 @@
+services:
+  phone-code:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - /tmp:/tmp
+    restart: unless-stopped

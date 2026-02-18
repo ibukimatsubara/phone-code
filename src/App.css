@@ -1,0 +1,63 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #1a1a2e;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
+  background: #16213e;
+  border-bottom: 1px solid #0f3460;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  font-size: 20px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.menu-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.session-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  font-size: 12px;
+}
+
+.status.on {
+  color: #4ecca3;
+}
+
+.status.off {
+  color: #e74c3c;
+}
+
+/* Terminal wrapper */
+.terminal-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}

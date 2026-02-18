@@ -1,0 +1,79 @@
+.input-bar {
+  flex-shrink: 0;
+  background: #16213e;
+  border-top: 1px solid #0f3460;
+  padding: 6px 8px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+
+/* Shortcut keys row */
+.shortcut-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shortcut-row::-webkit-scrollbar {
+  display: none;
+}
+
+.shortcut-btn {
+  padding: 6px 12px;
+  border: 1px solid #0f3460;
+  background: #1a1a2e;
+  color: #c0c0c0;
+  font-size: 13px;
+  font-family: 'Menlo', 'Courier New', monospace;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shortcut-btn:active {
+  background: #0f3460;
+  color: #4ecca3;
+}
+
+/* Input row */
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.input-field {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #0f3460;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 15px;
+  font-family: 'Menlo', 'Courier New', monospace;
+  border-radius: 8px;
+  outline: none;
+}
+
+.input-field:focus {
+  border-color: #4ecca3;
+}
+
+.input-field::placeholder {
+  color: #555;
+}
+
+.send-btn {
+  padding: 8px 14px;
+  border: none;
+  background: #4ecca3;
+  color: #1a1a2e;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.send-btn:active {
+  background: #3dbb92;
+}

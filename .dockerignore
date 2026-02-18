@@ -1,0 +1,7 @@
+node_modules
+dist
+docs
+.git
+*.md
+.dockerignore
+firebase-debug.log
