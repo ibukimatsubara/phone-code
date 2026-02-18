@@ -16,6 +16,7 @@ export default function Terminal({ output, onData, paneCols }) {
 
   useEffect(() => {
     const terminal = new XTerm({
+      convertEol: true,
       cursorBlink: false,
       cursorStyle: 'block',
       fontSize: DEFAULT_FONT_SIZE,
@@ -67,28 +68,19 @@ export default function Terminal({ output, onData, paneCols }) {
     };
   }, []);
 
-  // Adjust font size to match pane column width
+  // Adjust font size to fit pane column width
   useEffect(() => {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
     if (!terminal || !fitAddon || !paneCols) return;
 
-    // Start with default font size
-    terminal.options.fontSize = DEFAULT_FONT_SIZE;
-    fitAddon.fit();
-
-    // If terminal cols is less than pane cols, shrink font to fit
-    if (terminal.cols < paneCols) {
-      const ratio = terminal.cols / paneCols;
-      const newFontSize = Math.max(MIN_FONT_SIZE, Math.floor(DEFAULT_FONT_SIZE * ratio));
-      terminal.options.fontSize = newFontSize;
+    // Shrink font until terminal cols >= pane cols
+    let fontSize = DEFAULT_FONT_SIZE;
+    while (fontSize >= MIN_FONT_SIZE) {
+      terminal.options.fontSize = fontSize;
       fitAddon.fit();
-
-      // Fine-tune: if still too few cols, shrink one more
-      if (terminal.cols < paneCols && newFontSize > MIN_FONT_SIZE) {
-        terminal.options.fontSize = newFontSize - 1;
-        fitAddon.fit();
-      }
+      if (terminal.cols >= paneCols) break;
+      fontSize--;
     }
   }, [paneCols]);
 
