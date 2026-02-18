@@ -235,8 +235,10 @@ wss.on('connection', async (ws, req) => {
     }
 
     try {
+      console.log(`[ws] ← ${msg.type}`, msg.session || msg.target || '');
       await handleMessage(ws, msg);
     } catch (err) {
+      console.error(`[ws] error handling ${msg.type}:`, err.message);
       ws.send(
         JSON.stringify({ type: 'error', message: err.message || String(err) })
       );
@@ -268,6 +270,7 @@ async function handleMessage(ws, msg) {
     case 'panes': {
       if (!msg.session) throw new Error('session is required');
       const data = await tmux.listPanes(msg.session);
+      console.log(`[ws] → panes for ${msg.session}: ${data.length} panes`);
       send(ws, { type: 'panes', session: msg.session, data });
       break;
     }
