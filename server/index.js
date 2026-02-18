@@ -39,15 +39,24 @@ function tailscaleLocalAPI(apiPath) {
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {
+          if (res.statusCode !== 200) {
+            console.warn(`[tailscale-api] ${apiPath} → HTTP ${res.statusCode}: ${data.slice(0, 200)}`);
+            resolve(null);
+            return;
+          }
           try {
             resolve(JSON.parse(data));
           } catch {
+            console.warn(`[tailscale-api] ${apiPath} → invalid JSON: ${data.slice(0, 200)}`);
             resolve(null);
           }
         });
       }
     );
-    req.on('error', () => resolve(null));
+    req.on('error', (err) => {
+      console.warn(`[tailscale-api] socket error: ${err.message}`);
+      resolve(null);
+    });
     req.setTimeout(3000, () => {
       req.destroy();
       resolve(null);
@@ -151,12 +160,14 @@ const app = express();
 
 // IP check middleware
 app.use(async (req, res, next) => {
+  const ip = normalizeIp(req.ip);
   const result = await isAllowed(req.ip);
   if (!result.allowed) {
-    console.warn(`[security] Blocked HTTP from ${normalizeIp(req.ip)}: ${result.reason}`);
+    console.warn(`[security] Blocked HTTP from ${ip}: ${result.reason}`);
     res.status(403).send('Forbidden');
     return;
   }
+  console.log(`[security] Allowed HTTP from ${ip} (${result.reason})`);
   next();
 });
 
