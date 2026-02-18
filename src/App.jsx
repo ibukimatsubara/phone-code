@@ -16,7 +16,6 @@ export default function App() {
   const [currentPaneCols, setCurrentPaneCols] = useState(null);
   const [terminalOutput, setTerminalOutput] = useState('');
   const [fontSize, setFontSize] = useState(null); // null = auto-fit
-  const [terminalOverflow, setTerminalOverflow] = useState(false);
 
   const currentSessionRef = useRef(currentSession);
   const currentPaneRef = useRef(currentPane);
@@ -124,18 +123,12 @@ export default function App() {
     touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   }, []);
 
-  const terminalOverflowRef = useRef(terminalOverflow);
-  terminalOverflowRef.current = terminalOverflow;
-
   const handleTouchEnd = useCallback(
     (e) => {
       if (!touchStartRef.current) return;
       const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
       const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
       touchStartRef.current = null;
-
-      // Disable swipe when terminal has horizontal overflow
-      if (terminalOverflowRef.current) return;
 
       if (Math.abs(dx) < 80 || Math.abs(dy) > Math.abs(dx)) return;
 
@@ -194,7 +187,6 @@ export default function App() {
           paneCols={currentPaneCols}
           fontSize={fontSize}
           onFontSizeChange={setFontSize}
-          onOverflowChange={setTerminalOverflow}
         />
       </div>
 
