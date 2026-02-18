@@ -1,5 +1,5 @@
 import { execFile } from 'child_process';
-import { readdirSync, existsSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import path from 'path';
 
 function findTmuxSocket() {
@@ -8,14 +8,18 @@ function findTmuxSocket() {
     return process.env.TMUX_SOCKET_PATH;
   }
 
-  // Auto-detect: scan /tmp/tmux-* for sockets
+  // Auto-detect: scan /tmp/tmux-* for socket files
   try {
     const entries = readdirSync('/tmp').filter((e) => e.startsWith('tmux-'));
     for (const entry of entries) {
-      const socketPath = path.join('/tmp', entry, 'default');
-      if (existsSync(socketPath)) {
-        console.log(`[tmux] auto-detected socket: ${socketPath}`);
-        return socketPath;
+      const p = path.join('/tmp', entry, 'default');
+      try {
+        if (statSync(p).isSocket()) {
+          console.log(`[tmux] auto-detected socket: ${p}`);
+          return p;
+        }
+      } catch {
+        // not accessible or doesn't exist
       }
     }
   } catch {

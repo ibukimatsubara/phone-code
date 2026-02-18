@@ -4,10 +4,10 @@ import './Sidebar.css';
 export default function Sidebar({
   open,
   sessions,
+  allPanes,
   currentSession,
-  panes,
   currentPane,
-  onSelectSession,
+  onFetchPanes,
   onSelectPane,
   onClose,
 }) {
@@ -20,14 +20,16 @@ export default function Sidebar({
         next.delete(sessionName);
       } else {
         next.add(sessionName);
+        // Fetch panes when expanding
+        if (!allPanes[sessionName]) {
+          onFetchPanes(sessionName);
+        }
       }
       return next;
     });
   };
 
-  // Auto-expand current session
-  const isExpanded = (name) =>
-    expandedSessions.has(name) || name === currentSession;
+  const isExpanded = (name) => expandedSessions.has(name);
 
   return (
     <>
@@ -36,44 +38,44 @@ export default function Sidebar({
         <div className="sidebar-header">Sessions</div>
 
         <div className="sidebar-list">
-          {sessions.map((session) => (
-            <div key={session.name} className="session-group">
-              <button
-                className={`session-item ${session.name === currentSession ? 'active' : ''}`}
-                onClick={() => {
-                  if (session.name === currentSession) {
-                    toggleExpand(session.name);
-                  } else {
-                    onSelectSession(session.name);
-                  }
-                }}
-              >
-                <span className="expand-icon">
-                  {isExpanded(session.name) ? '\u25BC' : '\u25B6'}
-                </span>
-                <span className="session-label">{session.name}</span>
-                {session.attached && <span className="attached-badge">attached</span>}
-              </button>
+          {sessions.map((session) => {
+            const panes = allPanes[session.name] || [];
+            const expanded = isExpanded(session.name);
 
-              {isExpanded(session.name) &&
-                session.name === currentSession &&
-                panes.map((pane) => (
-                  <button
-                    key={pane.target}
-                    className={`pane-item ${pane.target === currentPane ? 'active' : ''}`}
-                    onClick={() => onSelectPane(pane.target)}
-                  >
-                    <span className="pane-indicator">
-                      {pane.target === currentPane ? '\u2726' : '\u2022'}
-                    </span>
-                    <span className="pane-label">
-                      pane:{pane.target}
-                    </span>
-                    <span className="pane-command">{pane.command}</span>
-                  </button>
-                ))}
-            </div>
-          ))}
+            return (
+              <div key={session.name} className="session-group">
+                <button
+                  className={`session-item ${session.name === currentSession ? 'active' : ''}`}
+                  onClick={() => toggleExpand(session.name)}
+                >
+                  <span className="expand-icon">
+                    {expanded ? '\u25BC' : '\u25B6'}
+                  </span>
+                  <span className="session-label">{session.name}</span>
+                  {session.attached && <span className="attached-badge">attached</span>}
+                </button>
+
+                {expanded &&
+                  panes.map((pane) => {
+                    const isActive =
+                      session.name === currentSession && pane.target === currentPane;
+                    return (
+                      <button
+                        key={pane.target}
+                        className={`pane-item ${isActive ? 'active' : ''}`}
+                        onClick={() => onSelectPane(session.name, pane.target)}
+                      >
+                        <span className="pane-indicator">
+                          {isActive ? '\u2726' : '\u2022'}
+                        </span>
+                        <span className="pane-label">pane:{pane.target}</span>
+                        <span className="pane-command">{pane.command}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            );
+          })}
 
           {sessions.length === 0 && (
             <div className="sidebar-empty">No tmux sessions found</div>

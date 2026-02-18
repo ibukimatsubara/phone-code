@@ -4,7 +4,10 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import './Terminal.css';
 
-export default function Terminal({ output, onData }) {
+const DEFAULT_FONT_SIZE = 13;
+const MIN_FONT_SIZE = 5;
+
+export default function Terminal({ output, onData, paneCols }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -15,7 +18,7 @@ export default function Terminal({ output, onData }) {
     const terminal = new XTerm({
       cursorBlink: false,
       cursorStyle: 'block',
-      fontSize: 13,
+      fontSize: DEFAULT_FONT_SIZE,
       fontFamily: "'Menlo', 'Courier New', monospace",
       lineHeight: 1.15,
       scrollback: 0,
@@ -64,6 +67,31 @@ export default function Terminal({ output, onData }) {
     };
   }, []);
 
+  // Adjust font size to match pane column width
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!terminal || !fitAddon || !paneCols) return;
+
+    // Start with default font size
+    terminal.options.fontSize = DEFAULT_FONT_SIZE;
+    fitAddon.fit();
+
+    // If terminal cols is less than pane cols, shrink font to fit
+    if (terminal.cols < paneCols) {
+      const ratio = terminal.cols / paneCols;
+      const newFontSize = Math.max(MIN_FONT_SIZE, Math.floor(DEFAULT_FONT_SIZE * ratio));
+      terminal.options.fontSize = newFontSize;
+      fitAddon.fit();
+
+      // Fine-tune: if still too few cols, shrink one more
+      if (terminal.cols < paneCols && newFontSize > MIN_FONT_SIZE) {
+        terminal.options.fontSize = newFontSize - 1;
+        fitAddon.fit();
+      }
+    }
+  }, [paneCols]);
+
   // Update terminal content when output changes
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -71,14 +99,6 @@ export default function Terminal({ output, onData }) {
 
     terminal.write('\x1b[2J\x1b[H' + output);
   }, [output]);
-
-  // Re-fit when container might have resized
-  useEffect(() => {
-    const fitAddon = fitAddonRef.current;
-    if (fitAddon) {
-      requestAnimationFrame(() => fitAddon.fit());
-    }
-  });
 
   return <div ref={containerRef} className="terminal-container" />;
 }

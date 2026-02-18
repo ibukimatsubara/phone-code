@@ -9,15 +9,18 @@ import './App.css';
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
-  const [panes, setPanes] = useState([]);
+  const [allPanes, setAllPanes] = useState({}); // { sessionName: [panes] }
   const [currentSession, setCurrentSession] = useState(null);
   const [currentPane, setCurrentPane] = useState(null);
+  const [currentPaneCols, setCurrentPaneCols] = useState(null);
   const [terminalOutput, setTerminalOutput] = useState('');
 
   const currentSessionRef = useRef(currentSession);
   const currentPaneRef = useRef(currentPane);
   currentSessionRef.current = currentSession;
   currentPaneRef.current = currentPane;
+
+  const currentPanes = allPanes[currentSession] || [];
 
   const { send, connected } = useWebSocket({
     onMessage: (msg) => {
@@ -26,7 +29,7 @@ export default function App() {
           setSessions(msg.data);
           break;
         case 'panes':
-          setPanes(msg.data);
+          setAllPanes((prev) => ({ ...prev, [msg.session]: msg.data }));
           break;
         case 'output':
           setTerminalOutput(msg.data);
@@ -45,41 +48,46 @@ export default function App() {
     }
   }, [connected, send]);
 
-  // Auto-select first session
+  // Auto-select first session on initial load
   useEffect(() => {
     if (sessions.length > 0 && !currentSession) {
-      selectSession(sessions[0].name);
+      const name = sessions[0].name;
+      setCurrentSession(name);
+      send({ type: 'panes', session: name });
     }
   }, [sessions]);
 
-  // Auto-select first pane
+  // Auto-select first pane when current session's panes arrive
   useEffect(() => {
-    if (panes.length > 0 && !currentPane) {
-      selectPane(panes[0].target);
+    if (currentPanes.length > 0 && !currentPane) {
+      navigateToPane(currentSession, currentPanes[0].target);
     }
-  }, [panes]);
+  }, [currentPanes]);
 
-  const selectSession = useCallback(
+  const fetchPanes = useCallback(
     (sessionName) => {
-      setCurrentSession(sessionName);
-      setCurrentPane(null);
-      setPanes([]);
-      setTerminalOutput('');
       send({ type: 'panes', session: sessionName });
     },
     [send]
   );
 
-  const selectPane = useCallback(
-    (paneTarget) => {
+  const navigateToPane = useCallback(
+    (sessionName, paneTarget) => {
+      setCurrentSession(sessionName);
       setCurrentPane(paneTarget);
       setTerminalOutput('');
-      const session = currentSessionRef.current;
-      if (session) {
-        send({ type: 'subscribe', target: `${session}:${paneTarget}` });
+
+      // Get pane cols from allPanes
+      const paneList = allPanes[sessionName] || [];
+      const pane = paneList.find((p) => p.target === paneTarget);
+      if (pane) {
+        const cols = parseInt(pane.size.split('x')[0], 10);
+        setCurrentPaneCols(cols);
       }
+
+      send({ type: 'subscribe', target: `${sessionName}:${paneTarget}` });
     },
-    [send]
+    [send, allPanes]
   );
 
   const handleInput = useCallback(
@@ -131,16 +139,16 @@ export default function App() {
 
       if (Math.abs(dx) < 80 || Math.abs(dy) > Math.abs(dx)) return;
 
-      const currentIndex = panes.findIndex((p) => p.target === currentPaneRef.current);
-      if (currentIndex === -1) return;
+      const idx = currentPanes.findIndex((p) => p.target === currentPaneRef.current);
+      if (idx === -1) return;
 
-      if (dx < 0 && currentIndex < panes.length - 1) {
-        selectPane(panes[currentIndex + 1].target);
-      } else if (dx > 0 && currentIndex > 0) {
-        selectPane(panes[currentIndex - 1].target);
+      if (dx < 0 && idx < currentPanes.length - 1) {
+        navigateToPane(currentSessionRef.current, currentPanes[idx + 1].target);
+      } else if (dx > 0 && idx > 0) {
+        navigateToPane(currentSessionRef.current, currentPanes[idx - 1].target);
       }
     },
-    [panes, selectPane]
+    [currentPanes, navigateToPane]
   );
 
   return (
@@ -158,28 +166,33 @@ export default function App() {
       <Sidebar
         open={sidebarOpen}
         sessions={sessions}
+        allPanes={allPanes}
         currentSession={currentSession}
-        panes={panes}
         currentPane={currentPane}
-        onSelectSession={(s) => {
-          selectSession(s);
-          setSidebarOpen(false);
-        }}
-        onSelectPane={(p) => {
-          selectPane(p);
+        onFetchPanes={fetchPanes}
+        onSelectPane={(session, pane) => {
+          navigateToPane(session, pane);
           setSidebarOpen(false);
         }}
         onClose={() => setSidebarOpen(false)}
       />
 
-      <TabBar panes={panes} currentPane={currentPane} onSelectPane={selectPane} />
+      <TabBar
+        panes={currentPanes}
+        currentPane={currentPane}
+        onSelectPane={(p) => navigateToPane(currentSession, p)}
+      />
 
       <div
         className="terminal-wrapper"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <Terminal output={terminalOutput} onData={handleTerminalData} />
+        <Terminal
+          output={terminalOutput}
+          onData={handleTerminalData}
+          paneCols={currentPaneCols}
+        />
       </div>
 
       <InputBar onSubmit={handleInput} onSpecialKey={handleSpecialKey} />
