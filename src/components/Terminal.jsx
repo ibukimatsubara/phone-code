@@ -23,7 +23,7 @@ export default function Terminal({ output, onData, paneCols, fontSize, onFontSiz
       fontSize: fontSize || DEFAULT_FONT_SIZE,
       fontFamily: "'Menlo', 'Courier New', monospace",
       lineHeight: 1.15,
-      scrollback: 0,
+      scrollback: 500,
       theme: {
         background: '#1a1a2e',
         foreground: '#e0e0e0',
