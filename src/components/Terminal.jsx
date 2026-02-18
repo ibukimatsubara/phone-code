@@ -8,7 +8,7 @@ const DEFAULT_FONT_SIZE = 13;
 const MIN_FONT_SIZE = 3;
 const MAX_FONT_SIZE = 28;
 
-export default function Terminal({ output, onData, paneCols, fontSize, onFontSizeChange }) {
+export default function Terminal({ output, onData, paneCols, fontSize, onFontSizeChange, onOverflowChange }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -127,18 +127,26 @@ export default function Terminal({ output, onData, paneCols, fontSize, onFontSiz
       xtermEl.style.width = neededWidth + 'px';
       xtermEl.style.minWidth = neededWidth + 'px';
       container.classList.add('overflow-x');
+      onOverflowChange?.(true);
     } else if (xtermEl) {
       xtermEl.style.width = '';
       xtermEl.style.minWidth = '';
       container.classList.remove('overflow-x');
+      onOverflowChange?.(false);
     }
   }, [fontSize, paneCols]);
 
-  // Auto-fit font size on initial pane load
+  // Auto-fit font size on initial pane load + reset scroll
   useEffect(() => {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
-    if (!terminal || !fitAddon || !paneCols || fontSize) return;
+    if (!terminal || !fitAddon || !paneCols) return;
+
+    // Reset scroll to left
+    const container = containerRef.current;
+    if (container) container.scrollLeft = 0;
+
+    if (fontSize) return; // manual override active, skip auto-fit
 
     // Shrink font until terminal cols >= pane cols
     let size = DEFAULT_FONT_SIZE;
@@ -149,6 +157,7 @@ export default function Terminal({ output, onData, paneCols, fontSize, onFontSiz
       size--;
     }
     onFontSizeChange?.(size);
+    onOverflowChange?.(false);
   }, [paneCols]);
 
   // Update terminal content when output changes
