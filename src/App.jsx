@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import useVisualViewport from './hooks/useVisualViewport';
 import useWebSocket from './hooks/useWebSocket';
 import Sidebar from './components/Sidebar';
 import TabBar from './components/TabBar';
@@ -22,6 +23,7 @@ export default function App() {
   currentPaneRef.current = currentPane;
 
   const currentPanes = allPanes[currentSession] || [];
+  const viewportHeight = useVisualViewport();
 
   const { send, connected } = useWebSocket({
     onMessage: (msg) => {
@@ -92,17 +94,6 @@ export default function App() {
     [send, allPanes]
   );
 
-  const handleInput = useCallback(
-    (text) => {
-      const session = currentSessionRef.current;
-      const pane = currentPaneRef.current;
-      if (session && pane) {
-        send({ type: 'input', target: `${session}:${pane}`, data: text });
-      }
-    },
-    [send]
-  );
-
   const handleSpecialKey = useCallback(
     (key) => {
       const session = currentSessionRef.current;
@@ -154,7 +145,7 @@ export default function App() {
   );
 
   return (
-    <div className="app">
+    <div className="app" style={viewportHeight ? { height: viewportHeight } : undefined}>
       <header className="header">
         <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
           ☰
@@ -200,7 +191,6 @@ export default function App() {
       </div>
 
       <InputBar
-        onSubmit={handleInput}
         onSpecialKey={handleSpecialKey}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}

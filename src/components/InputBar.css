@@ -10,7 +10,6 @@
 .shortcut-row {
   display: flex;
   gap: 6px;
-  margin-bottom: 6px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -49,43 +48,3 @@
   padding: 6px 10px;
 }
 
-/* Input row */
-.input-row {
-  display: flex;
-  gap: 8px;
-}
-
-.input-field {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #0f3460;
-  background: #1a1a2e;
-  color: #e0e0e0;
-  font-size: 15px;
-  font-family: 'Menlo', 'Courier New', monospace;
-  border-radius: 8px;
-  outline: none;
-}
-
-.input-field:focus {
-  border-color: #4ecca3;
-}
-
-.input-field::placeholder {
-  color: #555;
-}
-
-.send-btn {
-  padding: 8px 14px;
-  border: none;
-  background: #4ecca3;
-  color: #1a1a2e;
-  font-size: 18px;
-  font-weight: 700;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.send-btn:active {
-  background: #3dbb92;
-}

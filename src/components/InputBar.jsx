@@ -1,4 +1,3 @@
-import { useState, useRef } from 'react';
 import './InputBar.css';
 
 const MIN_FONT_SIZE = 3;
@@ -14,21 +13,7 @@ const SHORTCUT_KEYS = [
   { label: '^L', key: 'C-l' },
 ];
 
-export default function InputBar({ onSubmit, onSpecialKey, fontSize, onFontSizeChange }) {
-  const [text, setText] = useState('');
-  const inputRef = useRef(null);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (text) {
-      onSubmit(text);
-      onSpecialKey('Enter');
-      setText('');
-    } else {
-      onSpecialKey('Enter');
-    }
-  };
-
+export default function InputBar({ onSpecialKey, fontSize, onFontSizeChange }) {
   return (
     <div className="input-bar">
       <div className="shortcut-row">
@@ -36,10 +21,7 @@ export default function InputBar({ onSubmit, onSpecialKey, fontSize, onFontSizeC
           <button
             key={key}
             className="shortcut-btn"
-            onClick={() => {
-              onSpecialKey(key);
-              inputRef.current?.focus();
-            }}
+            onClick={() => onSpecialKey(key)}
           >
             {label}
           </button>
@@ -58,24 +40,6 @@ export default function InputBar({ onSubmit, onSpecialKey, fontSize, onFontSizeC
           A+
         </button>
       </div>
-
-      <form className="input-row" onSubmit={handleSubmit}>
-        <input
-          ref={inputRef}
-          type="text"
-          className="input-field"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Input..."
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck="false"
-        />
-        <button type="submit" className="send-btn">
-          {'\u23CE'}
-        </button>
-      </form>
     </div>
   );
 }
