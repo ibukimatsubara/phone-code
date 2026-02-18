@@ -49,14 +49,14 @@ export async function listSessions() {
     const stdout = await tmux(
       'list-sessions',
       '-F',
-      '#{session_name}\t#{session_windows}\t#{session_attached}'
+      '#{session_name}|||#{session_windows}|||#{session_attached}'
     );
     return stdout
       .trim()
       .split('\n')
       .filter(Boolean)
       .map((line) => {
-        const [name, windows, attached] = line.split('\t');
+        const [name, windows, attached] = line.split('|||');
         return {
           name,
           windows: parseInt(windows, 10),
@@ -74,14 +74,14 @@ export async function listPanes(session) {
     '-t',
     session,
     '-F',
-    '#{window_index}.#{pane_index}\t#{pane_current_command}\t#{pane_width}x#{pane_height}\t#{pane_active}'
+    '#{window_index}.#{pane_index}|||#{pane_current_command}|||#{pane_width}x#{pane_height}|||#{pane_active}'
   );
   return stdout
     .trim()
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      const [target, command, size, active] = line.split('\t');
+      const [target, command, size, active] = line.split('|||');
       return {
         target,
         command,
