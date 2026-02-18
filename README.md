@@ -19,6 +19,7 @@ Control your tmux sessions from your phone. Built for managing [Claude Code](htt
 - Send keyboard input, special keys (Ctrl+C, Ctrl+D, arrows, Tab, etc.)
 - Sidebar for session switching, tabs + swipe for pane switching
 - Auto-adjusts font size to match pane column width for accurate rendering
+- Claude Codeステータス検知 (処理中/入力待ち/承認待ち) をタブ・ヘッダーに表示
 - **Zero-config security**: auto-verifies connections via `tailscale whois`
 - Optional IP allowlist for additional restriction
 - HTTPS support via Tailscale certificates
@@ -38,9 +39,7 @@ Control your tmux sessions from your phone. Built for managing [Claude Code](htt
 │                                     │  ← xterm.js
 │                                     │
 ├─────────────────────────────────────┤
-│ [^C] [^D] [^Z] [↑] [↓] [Tab] [^L] │  ← shortcut keys
-├─────────────────────────────────────┤
-│ [Input...                        ⏎] │  ← text input
+│ [^C][^D][^Z][↑][↓][Tab][^L] [A-][A+]│  ← shortcut keys + font size
 └─────────────────────────────────────┘
 ```
 
@@ -52,15 +51,40 @@ Control your tmux sessions from your phone. Built for managing [Claude Code](htt
 
 ## Quick Start
 
-### Docker (recommended)
+### macOS (ローカル開発・実行)
+
+macOSではDocker DesktopがLinux VM上で動作するため、ホストのtmux/TailscaleのUnixソケットにコンテナからアクセスできない。**Dockerを使わず直接起動する。**
 
 ```bash
 git clone https://github.com/ibukimatsubara/phone-code.git
 cd phone-code
-docker compose up -d
+npm install
+npm run build && node server/index.js
 ```
 
-That's it. The app URL will be shown in the logs:
+開発モード (Vite HMR + サーバー同時起動):
+
+```bash
+npm run dev
+```
+
+### Linux サーバー (本番: Docker)
+
+Linuxではネイティブ Docker が動くため、`network_mode: host` でホストのtmux・Tailscaleに直接アクセスできる。
+
+```bash
+git clone https://github.com/ibukimatsubara/phone-code.git
+cd phone-code
+NETWORK_MODE=host docker compose up -d --build
+```
+
+リモートデプロイ:
+
+```bash
+ssh home "cd phone-code && git pull && NETWORK_MODE=host docker compose up -d --build"
+```
+
+アプリURLはログに表示される:
 
 ```bash
 docker compose logs
@@ -72,16 +96,6 @@ docker compose logs
 ```
 
 Open the Tailscale URL on your phone.
-
-### Without Docker
-
-```bash
-git clone https://github.com/ibukimatsubara/phone-code.git
-cd phone-code
-npm install
-npm run build
-npm start
-```
 
 ## Security
 
