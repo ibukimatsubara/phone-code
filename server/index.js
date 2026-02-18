@@ -85,10 +85,25 @@ function tailscaleWhoisCLI(ip) {
 const whoisCache = new Map();
 const CACHE_TTL = 60_000; // 1 minute
 const hasTailscaleSock = existsSync(TAILSCALE_SOCK);
+let tailscaleAvailable = null; // null = not checked yet
+
+async function checkTailscaleAvailability() {
+  // Try local API
+  if (hasTailscaleSock) {
+    const status = await tailscaleLocalAPI('/localapi/v0/status');
+    if (status) return 'socket';
+  }
+  // Try CLI
+  const cliStatus = await getTailscaleStatusCLI();
+  if (cliStatus) return 'cli';
+  return false;
+}
 
 async function tailscaleWhois(ip) {
-  // Try local API via Unix socket first (works in Docker)
-  if (hasTailscaleSock) {
+  if (!tailscaleAvailable) return null;
+
+  // Try local API via Unix socket first (works in Docker on Linux)
+  if (tailscaleAvailable === 'socket') {
     const result = await tailscaleLocalAPI(`/localapi/v0/whois?addr=${ip}:1`);
     if (result) return result;
   }
@@ -128,6 +143,11 @@ async function isAllowed(ip) {
     return { allowed: true, reason: 'localhost' };
   }
 
+  // If Tailscale is not available, allow all (dev/fallback mode)
+  if (!tailscaleAvailable) {
+    return { allowed: true, reason: 'no-auth (Tailscale unavailable)' };
+  }
+
   // Check Tailscale whois (primary auth)
   const peer = await isTailscalePeer(normalized);
   if (!peer.allowed) {
@@ -142,18 +162,7 @@ async function isAllowed(ip) {
   return { allowed: true, reason: `Tailscale: ${peer.user} (${peer.node})` };
 }
 
-// --- Startup log ---
-if (hasTailscaleSock) {
-  console.log('[security] Tailscale local API detected (Unix socket)');
-} else {
-  console.log('[security] Using Tailscale CLI for authentication');
-}
-console.log('[security] Tailscale whois authentication enabled');
-if (allowedIps.length > 0) {
-  console.log(`[security] Additional IP restriction: ${allowedIps.join(', ')}`);
-} else {
-  console.log('[security] All Tailscale peers on your tailnet are allowed');
-}
+// --- Startup log (Tailscale check is async, done in server.listen) ---
 
 // --- Express ---
 const app = express();
@@ -360,6 +369,20 @@ async function getTailscaleHostname() {
 
 const protocol = tlsCert && tlsKey && existsSync(tlsCert) ? 'https' : 'http';
 server.listen(PORT, '0.0.0.0', async () => {
+  // Check Tailscale availability
+  tailscaleAvailable = await checkTailscaleAvailability();
+  if (tailscaleAvailable) {
+    console.log(`[security] Tailscale authentication enabled (via ${tailscaleAvailable})`);
+    if (allowedIps.length > 0) {
+      console.log(`[security] Additional IP restriction: ${allowedIps.join(', ')}`);
+    } else {
+      console.log('[security] All Tailscale peers on your tailnet are allowed');
+    }
+  } else {
+    console.warn('[security] WARNING: Tailscale not available - all connections allowed!');
+    console.warn('[security] Install Tailscale for authentication');
+  }
+
   console.log('');
   console.log('  phone-code is running!');
   console.log('');

@@ -1,7 +1,9 @@
 services:
   phone-code:
     build: .
-    network_mode: host
+    network_mode: ${NETWORK_MODE:-bridge}
+    ports:
+      - "${PORT:-3000}:3000"
     volumes:
       - /tmp:/tmp
       - /var/run/tailscale:/var/run/tailscale:ro
