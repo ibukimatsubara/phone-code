@@ -5,5 +5,5 @@ services:
       - "${PORT:-3000}:3000"
     volumes:
       - /tmp:/tmp
-      - ./config.json:/app/config.json:ro
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
     restart: unless-stopped

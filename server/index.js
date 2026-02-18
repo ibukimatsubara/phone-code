@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
@@ -27,12 +28,34 @@ function loadConfig() {
   return {};
 }
 
-// --- Tailscale whois ---
-// Cache: ip -> { allowed: bool, user: string, expiry: timestamp }
-const whoisCache = new Map();
-const CACHE_TTL = 60_000; // 1 minute
+// --- Tailscale local API ---
+const TAILSCALE_SOCK = '/var/run/tailscale/tailscaled.sock';
 
-function tailscaleWhois(ip) {
+function tailscaleLocalAPI(apiPath) {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { socketPath: TAILSCALE_SOCK, path: apiPath },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on('error', () => resolve(null));
+    req.setTimeout(3000, () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
+function tailscaleWhoisCLI(ip) {
   return new Promise((resolve) => {
     execFile('tailscale', ['whois', '--json', ip], { timeout: 3000 }, (err, stdout) => {
       if (err) {
@@ -46,6 +69,22 @@ function tailscaleWhois(ip) {
       }
     });
   });
+}
+
+// --- Tailscale whois ---
+// Cache: ip -> { allowed: bool, user: string, expiry: timestamp }
+const whoisCache = new Map();
+const CACHE_TTL = 60_000; // 1 minute
+const hasTailscaleSock = existsSync(TAILSCALE_SOCK);
+
+async function tailscaleWhois(ip) {
+  // Try local API via Unix socket first (works in Docker)
+  if (hasTailscaleSock) {
+    const result = await tailscaleLocalAPI(`/localapi/v0/whois?addr=${ip}:1`);
+    if (result) return result;
+  }
+  // Fall back to CLI (works on host directly)
+  return tailscaleWhoisCLI(ip);
 }
 
 async function isTailscalePeer(ip) {
@@ -95,6 +134,11 @@ async function isAllowed(ip) {
 }
 
 // --- Startup log ---
+if (hasTailscaleSock) {
+  console.log('[security] Tailscale local API detected (Unix socket)');
+} else {
+  console.log('[security] Using Tailscale CLI for authentication');
+}
 console.log('[security] Tailscale whois authentication enabled');
 if (allowedIps.length > 0) {
   console.log(`[security] Additional IP restriction: ${allowedIps.join(', ')}`);
@@ -274,21 +318,33 @@ function send(ws, data) {
 }
 
 // --- Get Tailscale hostname for startup URL ---
-function getTailscaleHostname() {
+function getTailscaleStatusCLI() {
   return new Promise((resolve) => {
     execFile('tailscale', ['status', '--json'], { timeout: 3000 }, (err, stdout) => {
       if (err) { resolve(null); return; }
       try {
-        const status = JSON.parse(stdout);
-        const self = status.Self;
-        const dnsName = self?.DNSName?.replace(/\.$/, '') || null;
-        const tailscaleIp = self?.TailscaleIPs?.[0] || null;
-        resolve({ dnsName, tailscaleIp });
+        resolve(JSON.parse(stdout));
       } catch {
         resolve(null);
       }
     });
   });
+}
+
+async function getTailscaleHostname() {
+  // Try local API first, fall back to CLI
+  let status = hasTailscaleSock
+    ? await tailscaleLocalAPI('/localapi/v0/status')
+    : null;
+  if (!status) {
+    status = await getTailscaleStatusCLI();
+  }
+  if (!status) return null;
+
+  const self = status.Self;
+  const dnsName = self?.DNSName?.replace(/\.$/, '') || null;
+  const tailscaleIp = self?.TailscaleIPs?.[0] || null;
+  return { dnsName, tailscaleIp };
 }
 
 const protocol = tlsCert && tlsKey && existsSync(tlsCert) ? 'https' : 'http';
