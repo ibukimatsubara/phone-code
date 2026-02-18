@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
+import { execFile } from 'child_process';
 import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -26,35 +27,89 @@ function loadConfig() {
   return {};
 }
 
-// --- IP allowlist ---
+// --- Tailscale whois ---
+// Cache: ip -> { allowed: bool, user: string, expiry: timestamp }
+const whoisCache = new Map();
+const CACHE_TTL = 60_000; // 1 minute
+
+function tailscaleWhois(ip) {
+  return new Promise((resolve) => {
+    execFile('tailscale', ['whois', '--json', ip], { timeout: 3000 }, (err, stdout) => {
+      if (err) {
+        resolve(null);
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function isTailscalePeer(ip) {
+  // Check cache
+  const cached = whoisCache.get(ip);
+  if (cached && cached.expiry > Date.now()) {
+    return cached;
+  }
+
+  const info = await tailscaleWhois(ip);
+  const result = {
+    allowed: info !== null,
+    user: info?.UserProfile?.DisplayName || info?.UserProfile?.LoginName || 'unknown',
+    node: info?.Node?.Name || 'unknown',
+    expiry: Date.now() + CACHE_TTL,
+  };
+
+  whoisCache.set(ip, result);
+  return result;
+}
+
+// --- Access control ---
 function normalizeIp(ip) {
-  // Strip IPv6-mapped IPv4 prefix
   return ip?.replace(/^::ffff:/, '') || '';
 }
 
-function isAllowed(ip) {
+async function isAllowed(ip) {
   const normalized = normalizeIp(ip);
+
   // Always allow localhost
-  if (['127.0.0.1', '::1'].includes(normalized)) return true;
-  // If no allowlist configured, allow all (with warning)
-  if (allowedIps.length === 0) return true;
-  return allowedIps.includes(normalized);
+  if (['127.0.0.1', '::1'].includes(normalized)) {
+    return { allowed: true, reason: 'localhost' };
+  }
+
+  // Check Tailscale whois (primary auth)
+  const peer = await isTailscalePeer(normalized);
+  if (!peer.allowed) {
+    return { allowed: false, reason: 'not a Tailscale peer' };
+  }
+
+  // If allowedIps is set, further restrict to specific devices
+  if (allowedIps.length > 0 && !allowedIps.includes(normalized)) {
+    return { allowed: false, reason: `Tailscale peer ${peer.node} not in allowedIps` };
+  }
+
+  return { allowed: true, reason: `Tailscale: ${peer.user} (${peer.node})` };
 }
 
-if (allowedIps.length === 0) {
-  console.warn('[security] WARNING: No allowedIps configured. All connections are accepted.');
-  console.warn('[security] Set allowedIps in config.json to restrict access.');
+// --- Startup log ---
+console.log('[security] Tailscale whois authentication enabled');
+if (allowedIps.length > 0) {
+  console.log(`[security] Additional IP restriction: ${allowedIps.join(', ')}`);
 } else {
-  console.log(`[security] Allowed IPs: ${allowedIps.join(', ')}`);
+  console.log('[security] All Tailscale peers on your tailnet are allowed');
 }
 
 // --- Express ---
 const app = express();
 
 // IP check middleware
-app.use((req, res, next) => {
-  if (!isAllowed(req.ip)) {
-    console.warn(`[security] Blocked HTTP from ${req.ip}`);
+app.use(async (req, res, next) => {
+  const result = await isAllowed(req.ip);
+  if (!result.allowed) {
+    console.warn(`[security] Blocked HTTP from ${normalizeIp(req.ip)}: ${result.reason}`);
     res.status(403).send('Forbidden');
     return;
   }
@@ -94,16 +149,17 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // Track subscriptions: ws -> { target, interval, lastOutput }
 const subscriptions = new Map();
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', async (ws, req) => {
   const ip = normalizeIp(req.socket.remoteAddress);
+  const result = await isAllowed(ip);
 
-  if (!isAllowed(ip)) {
-    console.warn(`[security] Blocked WebSocket from ${ip}`);
+  if (!result.allowed) {
+    console.warn(`[security] Blocked WebSocket from ${ip}: ${result.reason}`);
     ws.close(4003, 'Forbidden');
     return;
   }
 
-  console.log(`[ws] client connected from ${ip}`);
+  console.log(`[ws] connected: ${ip} (${result.reason})`);
 
   ws.on('message', async (raw) => {
     let msg;
@@ -124,7 +180,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    console.log(`[ws] client disconnected from ${ip}`);
+    console.log(`[ws] disconnected: ${ip}`);
     clearSubscription(ws);
   });
 });
@@ -217,7 +273,39 @@ function send(ws, data) {
   }
 }
 
+// --- Get Tailscale hostname for startup URL ---
+function getTailscaleHostname() {
+  return new Promise((resolve) => {
+    execFile('tailscale', ['status', '--json'], { timeout: 3000 }, (err, stdout) => {
+      if (err) { resolve(null); return; }
+      try {
+        const status = JSON.parse(stdout);
+        const self = status.Self;
+        const dnsName = self?.DNSName?.replace(/\.$/, '') || null;
+        const tailscaleIp = self?.TailscaleIPs?.[0] || null;
+        resolve({ dnsName, tailscaleIp });
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
 const protocol = tlsCert && tlsKey && existsSync(tlsCert) ? 'https' : 'http';
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`phone-code running on ${protocol}://0.0.0.0:${PORT}`);
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log('');
+  console.log('  phone-code is running!');
+  console.log('');
+  console.log(`  Local:      ${protocol}://localhost:${PORT}`);
+
+  const ts = await getTailscaleHostname();
+  if (ts) {
+    if (ts.tailscaleIp) {
+      console.log(`  Tailscale:  ${protocol}://${ts.tailscaleIp}:${PORT}`);
+    }
+    if (ts.dnsName) {
+      console.log(`  Tailscale:  ${protocol}://${ts.dnsName}:${PORT}`);
+    }
+  }
+  console.log('');
 });

@@ -19,7 +19,8 @@ Control your tmux sessions from your phone. Built for managing [Claude Code](htt
 - Send keyboard input, special keys (Ctrl+C, Ctrl+D, arrows, Tab, etc.)
 - Sidebar for session switching, tabs + swipe for pane switching
 - Auto-adjusts font size to match pane column width for accurate rendering
-- Tailscale IP allowlist for access control
+- **Zero-config security**: auto-verifies connections via `tailscale whois`
+- Optional IP allowlist for additional restriction
 - HTTPS support via Tailscale certificates
 
 ## Mobile UI
@@ -56,77 +57,58 @@ Control your tmux sessions from your phone. Built for managing [Claude Code](htt
 ```bash
 git clone https://github.com/ibukimatsubara/phone-code.git
 cd phone-code
-
-# Create config
-cp config.example.json config.json
-# Edit config.json to add your phone's Tailscale IP (see Security section)
-
-# Start
 docker compose up -d
-
-# Open in phone browser
-# http://<your-server-tailscale-ip>:3000
 ```
+
+That's it. The app URL will be shown in the logs:
+
+```bash
+docker compose logs
+#   phone-code is running!
+#
+#   Local:      http://localhost:3000
+#   Tailscale:  http://100.x.x.x:3000
+#   Tailscale:  http://your-server.tailnet.ts.net:3000
+```
+
+Open the Tailscale URL on your phone.
 
 ### Without Docker
 
 ```bash
 git clone https://github.com/ibukimatsubara/phone-code.git
 cd phone-code
-
 npm install
 npm run build
-cp config.example.json config.json
-
 npm start
-# → phone-code running on http://0.0.0.0:3000
 ```
-
-## Configuration
-
-Create `config.json` from the example:
-
-```bash
-cp config.example.json config.json
-```
-
-```json
-{
-  "allowedIps": ["100.64.x.x"],
-  "tlsCert": "",
-  "tlsKey": "",
-  "port": 3000
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `allowedIps` | Array of Tailscale IPs allowed to connect. Empty = allow all (not recommended). |
-| `tlsCert` | Path to TLS certificate file (from `tailscale cert`). |
-| `tlsKey` | Path to TLS private key file. |
-| `port` | Server port. Default: `3000`. |
 
 ## Security
 
-### Find your phone's Tailscale IP
+### Default: Tailscale whois (zero config)
 
-On your phone, open the Tailscale app and note your device's IP address (e.g., `100.100.x.x`).
+By default, phone-code uses `tailscale whois` to verify that every connection comes from a device on **your Tailscale network**. No configuration needed.
 
-Or from any Tailscale device:
+```
+Phone connects → server runs `tailscale whois <ip>`
+  → Same tailnet? ✅ Allow
+  → Unknown?      ❌ Block (403 Forbidden)
+```
+
+The server logs show who connected:
+
+```
+[ws] connected: 100.100.1.23 (Tailscale: John (iphone))
+[security] Blocked HTTP from 192.168.1.50: not a Tailscale peer
+```
+
+### Optional: Restrict to specific devices
+
+To limit access to specific Tailscale devices, create `config.json`:
 
 ```bash
-tailscale status
+cp config.example.json config.json
 ```
-
-Add it to `config.json`:
-
-```json
-{
-  "allowedIps": ["100.100.1.23"]
-}
-```
-
-Multiple devices:
 
 ```json
 {
@@ -134,39 +116,63 @@ Multiple devices:
 }
 ```
 
-### Enable HTTPS with Tailscale
+Find your phone's Tailscale IP:
+
+```bash
+tailscale status
+```
+
+### Enable HTTPS
 
 Generate TLS certificates for your server's Tailscale hostname:
 
 ```bash
-tailscale cert <your-machine-name>.<tailnet>.ts.net
-# Creates: <hostname>.crt and <hostname>.key
+tailscale cert your-server.tailnet.ts.net
 ```
 
-Update `config.json`:
+Add to `config.json`:
 
 ```json
 {
-  "allowedIps": ["100.100.1.23"],
-  "tlsCert": "/path/to/<hostname>.crt",
-  "tlsKey": "/path/to/<hostname>.key"
+  "tlsCert": "/path/to/your-server.tailnet.ts.net.crt",
+  "tlsKey": "/path/to/your-server.tailnet.ts.net.key"
 }
 ```
 
-Now access via:
-
-```
-https://<your-machine-name>.<tailnet>.ts.net:3000
-```
+Access via `https://your-server.tailnet.ts.net:3000`.
 
 ### Tailscale ACL (additional layer)
 
-You can also restrict access at the network level via [Tailscale ACLs](https://tailscale.com/kb/1018/acls/). This provides defense-in-depth on top of the app-level IP allowlist.
+For defense-in-depth, restrict access at the network level via [Tailscale ACLs](https://tailscale.com/kb/1018/acls/).
+
+## Configuration
+
+`config.json` is **optional**. Create it only if you need additional settings:
+
+```json
+{
+  "allowedIps": [],
+  "tlsCert": "",
+  "tlsKey": "",
+  "port": 3000
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `allowedIps` | `[]` | Restrict to specific Tailscale IPs. Empty = all tailnet peers allowed. |
+| `tlsCert` | `""` | Path to TLS certificate file. |
+| `tlsKey` | `""` | Path to TLS private key file. |
+| `port` | `3000` | Server port. |
 
 ## How It Works
 
 ```
 Phone Browser                    Node.js Server                tmux
+     │                                │                          │
+     │  connect                       │                          │
+     │ ──────────────────────────────→│                          │
+     │                                │  tailscale whois (auth)  │
      │                                │                          │
      │ WebSocket: { subscribe }       │                          │
      │ ──────────────────────────────→│                          │
@@ -183,10 +189,11 @@ Phone Browser                    Node.js Server                tmux
      │                                │ ────────────────────────→│
 ```
 
-- **Output**: `tmux capture-pane -p -e` polled every 150ms, sent to client only on change
+- **Auth**: `tailscale whois` verifies connections are from your tailnet
+- **Output**: `tmux capture-pane -p -e` polled every 150ms, sent only on change
 - **Input**: `tmux send-keys -l` for text, `tmux send-keys` for special keys
 - **Rendering**: xterm.js with `convertEol: true`, font auto-scaled to match pane width
-- **No SSH required**: server runs on the same machine as tmux, uses `child_process.execFile`
+- **No SSH required**: runs on the same machine as tmux, uses `child_process.execFile`
 
 ## Development
 
@@ -194,8 +201,6 @@ Phone Browser                    Node.js Server                tmux
 npm install
 npm run dev    # Starts Vite dev server + Node.js backend concurrently
 ```
-
-The Vite dev server proxies WebSocket requests to the backend (port 3000).
 
 ## Tech Stack
 
@@ -211,8 +216,8 @@ The Vite dev server proxies WebSocket requests to the backend (port 3000).
 Deploy phone-code on each server. Switch between servers by navigating to different URLs:
 
 ```
-https://server-a.<tailnet>.ts.net:3000
-https://server-b.<tailnet>.ts.net:3000
+https://server-a.tailnet.ts.net:3000
+https://server-b.tailnet.ts.net:3000
 ```
 
 ## License
