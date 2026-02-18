@@ -14,6 +14,7 @@ export default function App() {
   const [currentPane, setCurrentPane] = useState(null);
   const [currentPaneCols, setCurrentPaneCols] = useState(null);
   const [terminalOutput, setTerminalOutput] = useState('');
+  const [fontSize, setFontSize] = useState(null); // null = auto-fit
 
   const currentSessionRef = useRef(currentSession);
   const currentPaneRef = useRef(currentPane);
@@ -76,6 +77,7 @@ export default function App() {
       setCurrentSession(sessionName);
       setCurrentPane(paneTarget);
       setTerminalOutput('');
+      setFontSize(null); // reset to auto-fit for new pane
 
       // Get pane cols from allPanes
       const paneList = allPanes[sessionName] || [];
@@ -192,10 +194,17 @@ export default function App() {
           output={terminalOutput}
           onData={handleTerminalData}
           paneCols={currentPaneCols}
+          fontSize={fontSize}
+          onFontSizeChange={setFontSize}
         />
       </div>
 
-      <InputBar onSubmit={handleInput} onSpecialKey={handleSpecialKey} />
+      <InputBar
+        onSubmit={handleInput}
+        onSpecialKey={handleSpecialKey}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+      />
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { useState, useRef } from 'react';
 import './InputBar.css';
 
+const MIN_FONT_SIZE = 3;
+const MAX_FONT_SIZE = 28;
+
 const SHORTCUT_KEYS = [
   { label: '^C', key: 'C-c' },
   { label: '^D', key: 'C-d' },
@@ -11,7 +14,7 @@ const SHORTCUT_KEYS = [
   { label: '^L', key: 'C-l' },
 ];
 
-export default function InputBar({ onSubmit, onSpecialKey }) {
+export default function InputBar({ onSubmit, onSpecialKey, fontSize, onFontSizeChange }) {
   const [text, setText] = useState('');
   const inputRef = useRef(null);
 
@@ -41,6 +44,19 @@ export default function InputBar({ onSubmit, onSpecialKey }) {
             {label}
           </button>
         ))}
+        <span className="font-size-separator" />
+        <button
+          className="shortcut-btn font-btn"
+          onClick={() => onFontSizeChange?.(Math.max(MIN_FONT_SIZE, (fontSize || 13) - 1))}
+        >
+          A-
+        </button>
+        <button
+          className="shortcut-btn font-btn"
+          onClick={() => onFontSizeChange?.(Math.min(MAX_FONT_SIZE, (fontSize || 13) + 1))}
+        >
+          A+
+        </button>
       </div>
 
       <form className="input-row" onSubmit={handleSubmit}>

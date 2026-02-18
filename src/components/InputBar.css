@@ -37,6 +37,18 @@
   color: #4ecca3;
 }
 
+.font-size-separator {
+  width: 1px;
+  background: #0f3460;
+  flex-shrink: 0;
+}
+
+.font-btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
 /* Input row */
 .input-row {
   display: flex;
