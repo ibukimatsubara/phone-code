@@ -55,6 +55,34 @@
   color: #e74c3c;
 }
 
+/* Claude status indicator in header */
+.claude-status {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.claude-status.processing {
+  background: #4ecca3;
+  animation: claude-pulse 1s ease-in-out infinite;
+}
+
+.claude-status.idle {
+  background: #576574;
+}
+
+.claude-status.awaiting_approval {
+  background: #f1c40f;
+  animation: claude-pulse 1s ease-in-out infinite;
+}
+
+@keyframes claude-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* Terminal wrapper */
 .terminal-wrapper {
   flex: 1;

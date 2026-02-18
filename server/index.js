@@ -255,6 +255,7 @@ function clearSubscription(ws) {
   const sub = subscriptions.get(ws);
   if (sub) {
     clearInterval(sub.interval);
+    if (sub.statusInterval) clearInterval(sub.statusInterval);
     subscriptions.delete(ws);
   }
 }
@@ -279,32 +280,63 @@ async function handleMessage(ws, msg) {
       if (!msg.target) throw new Error('target is required');
       clearSubscription(ws);
 
+      const sessionName = msg.target.split(':')[0];
       let lastOutput = '';
+      let lastStatus = '';
 
-      // Send initial capture
+      // Send initial capture with status
       try {
-        const output = await tmux.capturePane(msg.target);
+        const [output, title] = await Promise.all([
+          tmux.capturePane(msg.target),
+          tmux.getPaneTitle(msg.target),
+        ]);
         lastOutput = output;
-        send(ws, { type: 'output', target: msg.target, data: output });
+        const status = tmux.detectClaudeStatus(title, output);
+        lastStatus = status;
+        send(ws, { type: 'output', target: msg.target, data: output, status });
       } catch (err) {
         send(ws, { type: 'error', message: `capture failed: ${err.message}` });
         return;
       }
 
-      // Start polling
+      // Content + status polling for subscribed pane (150ms)
       const interval = setInterval(async () => {
         try {
-          const output = await tmux.capturePane(msg.target);
-          if (output !== lastOutput) {
+          const [output, title] = await Promise.all([
+            tmux.capturePane(msg.target),
+            tmux.getPaneTitle(msg.target),
+          ]);
+          const status = tmux.detectClaudeStatus(title, output);
+          if (output !== lastOutput || status !== lastStatus) {
             lastOutput = output;
-            send(ws, { type: 'output', target: msg.target, data: output });
+            lastStatus = status;
+            send(ws, { type: 'output', target: msg.target, data: output, status });
           }
         } catch {
           // pane may have closed, ignore
         }
       }, 150);
 
-      subscriptions.set(ws, { target: msg.target, interval, lastOutput });
+      // Session-wide status polling via titles (2s) for tab indicators
+      let lastStatuses = '';
+      const statusInterval = setInterval(async () => {
+        try {
+          const panes = await tmux.listPanes(sessionName);
+          const statuses = {};
+          for (const pane of panes) {
+            statuses[pane.target] = tmux.detectClaudeStatus(pane.title, null);
+          }
+          const json = JSON.stringify(statuses);
+          if (json !== lastStatuses) {
+            lastStatuses = json;
+            send(ws, { type: 'pane_statuses', session: sessionName, data: statuses });
+          }
+        } catch {
+          // session may have closed
+        }
+      }, 2000);
+
+      subscriptions.set(ws, { target: msg.target, interval, statusInterval, lastOutput });
       break;
     }
 

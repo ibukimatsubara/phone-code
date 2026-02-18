@@ -74,21 +74,68 @@ export async function listPanes(session) {
     '-t',
     session,
     '-F',
-    '#{window_index}.#{pane_index}|||#{pane_current_command}|||#{pane_width}x#{pane_height}|||#{pane_active}'
+    '#{window_index}.#{pane_index}|||#{pane_current_command}|||#{pane_width}x#{pane_height}|||#{pane_active}|||#{pane_title}'
   );
   return stdout
     .trim()
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      const [target, command, size, active] = line.split('|||');
+      const [target, command, size, active, title] = line.split('|||');
       return {
         target,
         command,
         size,
         active: active === '1',
+        title: title || '',
       };
     });
+}
+
+export async function getPaneTitle(target) {
+  try {
+    const stdout = await tmux('display-message', '-p', '-t', target, '#{pane_title}');
+    return stdout.trim();
+  } catch {
+    return '';
+  }
+}
+
+// Detect Claude Code status from pane title and/or content
+// Returns: 'processing' | 'awaiting_approval' | 'idle' | 'unknown'
+export function detectClaudeStatus(title, content) {
+  // Method 1: Braille spinner in pane title (U+2800..U+28FF)
+  if (title) {
+    for (const ch of title) {
+      const code = ch.codePointAt(0);
+      if (code >= 0x2800 && code <= 0x28FF) {
+        return 'processing';
+      }
+    }
+  }
+
+  // Method 2: Content parsing (last ~10 lines)
+  if (content) {
+    const lines = content.trimEnd().split('\n');
+    const tail = lines.slice(-10).join('\n');
+
+    // Awaiting approval (check before processing)
+    if (/\(Y\)es|\(N\)o|\[Y\/n\]|\[y\/N\]/i.test(tail)) {
+      return 'awaiting_approval';
+    }
+
+    // Processing indicators
+    if (/Ctrl[+\s-]C\s*(to\s+)?(interrupt|cancel|stop)/i.test(tail)) {
+      return 'processing';
+    }
+
+    // Idle prompt (❯ at end of content)
+    if (/❯\s*$/.test(tail)) {
+      return 'idle';
+    }
+  }
+
+  return 'unknown';
 }
 
 export async function capturePane(target) {

@@ -16,6 +16,7 @@ export default function App() {
   const [currentPaneCols, setCurrentPaneCols] = useState(null);
   const [terminalOutput, setTerminalOutput] = useState('');
   const [fontSize, setFontSize] = useState(null); // null = auto-fit
+  const [paneStatuses, setPaneStatuses] = useState({}); // { target: status }
 
   const currentSessionRef = useRef(currentSession);
   const currentPaneRef = useRef(currentPane);
@@ -36,6 +37,12 @@ export default function App() {
           break;
         case 'output':
           setTerminalOutput(msg.data);
+          if (msg.status) {
+            setPaneStatuses((prev) => ({ ...prev, [msg.target]: msg.status }));
+          }
+          break;
+        case 'pane_statuses':
+          setPaneStatuses((prev) => ({ ...prev, ...msg.data }));
           break;
         case 'error':
           console.error('[server]', msg.message);
@@ -151,6 +158,9 @@ export default function App() {
           ☰
         </button>
         <span className="session-name">{currentSession || 'phone-code'}</span>
+        {currentPane && paneStatuses[currentPane] && paneStatuses[currentPane] !== 'unknown' && (
+          <span className={`claude-status ${paneStatuses[currentPane]}`} />
+        )}
         <span className={`status ${connected ? 'on' : 'off'}`}>
           {connected ? '\u25CF' : '\u25CB'}
         </span>
@@ -173,6 +183,7 @@ export default function App() {
       <TabBar
         panes={currentPanes}
         currentPane={currentPane}
+        paneStatuses={paneStatuses}
         onSelectPane={(p) => navigateToPane(currentSession, p)}
       />
 

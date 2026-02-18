@@ -52,3 +52,32 @@
 .tab.active .tab-command {
   color: rgba(78, 204, 163, 0.6);
 }
+
+/* Status indicators */
+.tab-status {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.tab-status.processing {
+  background: #4ecca3;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.tab-status.idle {
+  background: #576574;
+}
+
+.tab-status.awaiting_approval {
+  background: #f1c40f;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
